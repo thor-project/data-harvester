@@ -1,7 +1,7 @@
 import json
 import os
-import urllib
-import urllib2
+from datetime import datetime
+from iso8601 import ParseError
 
 __author__ = 'eamonnmaguire'
 
@@ -65,9 +65,9 @@ class DATACiteHarvester(Harvester):
     date_field = "minted"
     search_space = [
         {'type': 'datacentre', 'resource': 'CDL.DRYAD+-+Dryad', 'country': 'USA'},
-        # {'type': 'datacentre', 'resource': 'CDL.DIGSCI+-+Digital+Science', 'country': 'United Kingdom'},
-        # {'type': 'allocator', 'resource': 'BL+-+The+British+Library', 'country': 'United Kingdom'},
-        # {'type': 'datacentre', 'resource': 'TIB+-+German+National+Library+of+Science+and+Technology', 'country': 'Germany'},
+        {'type': 'datacentre', 'resource': 'CDL.DIGSCI+-+Digital+Science', 'country': 'United Kingdom'},
+        {'type': 'allocator', 'resource': 'BL+-+The+British+Library', 'country': 'United Kingdom'},
+        {'type': 'datacentre', 'resource': 'TIB+-+German+National+Library+of+Science+and+Technology', 'country': 'Germany'},
         {'type': 'allocator', 'resource': 'ANDS+-+Australian+National+Data+Service', 'country': 'Australia'},
         {'type': 'allocator', 'resource': 'CERN+-+CERN+-+European+Organization+for+Nuclear+Research',
          'country': 'Switzerland'},
@@ -96,12 +96,29 @@ class DATACiteHarvester(Harvester):
                                                                       self.end_date,
                                                                       resource_type['facet']))
 
-            json.dump(results, open(os.path.join(self._cachedir, 'dois.json'), 'w'))
-            return results
-
+        json.dump(results, open(os.path.join(self._cachedir, 'dois.json'), 'w'))
+        return results
 
     def process_statistics(self, resource, resource_type, statistics):
 
-        result = [{'country': resource['country'], 'institution': resource['resource'],
-                   'data_key': resource_type, 'date': x, 'data_value': statistics['facet_counts']['facet_dates']['minted'][x]} for x in statistics['facet_counts']['facet_dates']['minted']]
+        result = []
+        for x in statistics['facet_counts']['facet_dates']['minted']:
+            _parsed, _date = self.process_date(x)
+            if _parsed and statistics['facet_counts']['facet_dates']['minted'][x] is not 0:
+                result.append({'country': resource['country'], 'institution': resource['resource'],
+                               'data_key': resource_type, 'date': _date,
+                               'data_value': statistics['facet_counts']['facet_dates']['minted'][x]})
+
         return result
+
+    def process_date(self, date):
+
+        # 2000-01-01T00:00:00Z
+        # 2013-09-01
+        import iso8601
+
+        try:
+            time = iso8601.parse_date(date)
+            return True, datetime.strftime(time, '%Y-%m-%d')
+        except ParseError:
+            return False, None
