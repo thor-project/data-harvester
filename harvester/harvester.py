@@ -7,8 +7,7 @@ __author__ = 'eamonnmaguire'
 
 
 class Harvester(object):
-    def __init__(self):
-        pass
+    cachedir = 'cache'
 
     def get_url(self, url):
         import requests
@@ -32,19 +31,77 @@ class Harvester(object):
 
         return docs
 
+    @staticmethod
+    def process_date(date, normalise_month=False):
+
+        """
+        :param date: date string to be parsed, e.g. 2000-01-07T00:00:00Z
+        :param normalise_month: if True, normalise to the month, standardising the day, e.g. 2000-01-01
+        :return: if truncated, then 2000-01-01, else 2000-01-07
+        """
+        import iso8601
+
+        try:
+            time = iso8601.parse_date(date)
+
+            if normalise_month:
+                parsed_date = datetime.strftime(time, '%Y-%m-01')
+            else:
+                parsed_date = datetime.strftime(time, '%Y-%m-%d')
+
+            return True, parsed_date, datetime.strptime(parsed_date, '%Y-%m-%d')
+        except ParseError:
+            return False, None, None
+
 
 class ORCIDHarvester(Harvester):
     _base_url = 'https://pub.orcid.org/v2.0_rc1/statistics/{}'
-    _statistics_to_retrieve = ['liveIds', 'idsWithWorks', 'idsWithVerifiedEmail', 'uniqueDois', 'works']
+    _statistics_to_retrieve = ['liveIds', 'idsWithWorks', 'idsWithVerifiedEmail', 'uniqueDois', 'works',
+                               'worksWithDois', 'funding', 'education', 'employment']
 
     def harvest(self):
         # need to merge the stats into a coherent structure suitable for the front end.
-        result = {"stats": {}}
+        date_stats = {}
+        for statistic in self.get_available_statistics():
+            query_result = self.get_statistic(self._base_url, statistic)
+            for date in query_result['timeline']:
+                _success, processed_date_str, processed_date_datetime = self.process_date(date, normalise_month=True)
+
+                if _success and processed_date_datetime not in date_stats:
+                    date_stats[processed_date_datetime] = self.populate_default_dict(processed_date_str)
+
+                if query_result['timeline'][date] > date_stats[processed_date_datetime][statistic]:
+                    date_stats[processed_date_datetime][statistic] = query_result['timeline'][date]
+
+        results = self.process_results(date_stats)
+        self.write_as_json(results, os.path.join(self.cachedir, 'orcids.json'))
+        return results
+
+    def process_results(self, stats):
+        import operator
+        sorted_dates = sorted(stats.items(), key=operator.itemgetter(0))
+
+        processed_values = []
+        last_values = {}
+        for statistic in self.get_available_statistics():
+            last_values[statistic] = 0
+        for index, date in enumerate(sorted_dates):
+
+            value = date.__getitem__(1)
+            for statistic in self.get_available_statistics():
+                value[statistic + "_month"] = max(0, value[statistic] - last_values[statistic])
+                last_values[statistic] = value[statistic]
+
+            processed_values.append(value)
+
+        return processed_values
+
+    def populate_default_dict(self, date):
+        __dict = {'date': date}
 
         for statistic in self.get_available_statistics():
-            result['stats'][statistic] = self.get_statistic(self._base_url, statistic)
-
-        return result
+            __dict[statistic] = 0
+        return __dict
 
     def get_available_statistics(self):
         return self._statistics_to_retrieve
@@ -57,21 +114,28 @@ class DATACiteHarvester(Harvester):
     # {3} - start date, e.g. 2000-01-01T00:00:00Z
     # {4} - end data, e.g. 2015-12-01T00:00:00Z
     # {5} - additional facets, e.g. dataset type &fq=resourceTypeGeneral:"dataset"
-    _base_url = 'http://search.datacite.org/api?q=*&fq={0}_facet:"{1}"&fq=is_active:true&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={2}&facet.date.start={3}&facet.date.end={4}&facet.date.gap=%2B1MONTH{5}'
-    _cachedir = 'cache'
+    _base_url = 'http://search.datacite.org/api?q={0}&fq={1}_facet:"{2}"&fq=is_active:true&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={3}&facet.date.start={4}&facet.date.end={5}&facet.date.gap=%2B1MONTH{6}'
 
-    start_date = "2000-01-01T00:00:00Z"
-    end_date = "2015-01-01T00:00:00Z"
-    date_field = "minted"
+    _start_date = "2000-01-01T00:00:00Z"
+    _end_date = "2015-12-01T00:00:00Z"
+    _date_field = "minted"
+
     search_space = [
-        {'type': 'datacentre', 'resource': 'CDL.DRYAD+-+Dryad', 'country': 'USA'},
-        {'type': 'datacentre', 'resource': 'CDL.DIGSCI+-+Digital+Science', 'country': 'United Kingdom'},
-        {'type': 'allocator', 'resource': 'BL+-+The+British+Library', 'country': 'United Kingdom'},
-        {'type': 'datacentre', 'resource': 'TIB+-+German+National+Library+of+Science+and+Technology', 'country': 'Germany'},
-        {'type': 'allocator', 'resource': 'ANDS+-+Australian+National+Data+Service', 'country': 'Australia'},
-        {'type': 'allocator', 'resource': 'CERN+-+CERN+-+European+Organization+for+Nuclear+Research',
-         'country': 'Switzerland'},
 
+        {'type': 'datacentre', 'resource': 'CDL.DRYAD+-+Dryad', 'country': 'United States'},
+        {'type': 'datacentre', 'resource': 'CDL.DIGSCI+-+Digital+Science', 'country': 'United Kingdom'},
+        {'type': 'datacentre', 'resource': 'BL.IMPERIAL+-+Imperial+College+London', 'country': 'United Kingdom'},
+        {'type': 'datacentre', 'resource': 'BL.CCDC+-+The+Cambridge+Crystallographic+Data+Centre',
+         'country': 'United Kingdom'},
+        {'type': 'datacentre', 'resource': 'BL.F1000R+-+Faculty+of+1000+Research+Ltd', 'country': 'United Kingdom'},
+        {'type': 'datacentre', 'resource': 'BL.UKDA+-+UK+Data+Archive', 'country': 'United Kingdom'},
+        {'type': 'datacentre',
+         'resource': 'TIB.PANGAEA+-+PANGAEA+-+Publishing+Network+for+Geoscientific+and+Environmental+Data',
+         'country': 'Germany'},
+        {'type': 'datacentre', 'resource': 'TIB.R-GATE+-+ResearchGate', 'country': 'Germany'},
+        {'type': 'allocator', 'resource': 'ANDS+-+Australian+National+Data+Service', 'country': 'Australia'},
+        {'type': 'datacentre', 'resource': 'CERN.ZENODO+-+ZENODO+-+Research.+Shared.', 'country': 'Switzerland'},
+        {'type': 'datacentre', 'resource': 'CERN.YELLOW+-+CERN+Yellow+Reports', 'country': 'Switzerland'}
     ]
 
     resource_types = [{'name': 'Collection', 'facet': '&fq=resourceType_facet:"Collection"'},
@@ -82,6 +146,9 @@ class DATACiteHarvester(Harvester):
                       {'name': 'Unknown', 'facet': "&fq=-resourceType_facet%3A[*+TO+*]"}
                       ]
 
+    restrictions = [{'name': 'with_orcids', 'query': 'nameIdentifier:ORCID%5C:*'},
+                    {'name': 'without_orcids', 'query': '*'}]
+
     def harvest(self):
         os.makedirs(self._cachedir)
 
@@ -89,36 +156,26 @@ class DATACiteHarvester(Harvester):
         results = []
         for resource in self.search_space:
             for resource_type in self.resource_types:
-                results += self.process_statistics(resource, resource_type['name'],
-                                                   self.get_statistic(self._base_url, resource['type'],
-                                                                      resource['resource'],
-                                                                      self.date_field, self.start_date,
-                                                                      self.end_date,
-                                                                      resource_type['facet']))
+                for restriction in self.restrictions:
+                    results += self.process_statistics(resource, resource_type['name'], restriction,
+                                                       self.get_statistic(self._base_url, restriction['query'],
+                                                                          resource['type'], resource['resource'],
+                                                                          self._date_field,
+                                                                          self._start_date, self._end_date,
+                                                                          resource_type['facet']))
 
-        json.dump(results, open(os.path.join(self._cachedir, 'dois.json'), 'w'))
+        self.write_as_json(results, os.path.join(self.cachedir, 'dois.json'))
         return results
 
-    def process_statistics(self, resource, resource_type, statistics):
+    def process_statistics(self, resource, resource_type, restriction, statistics):
 
         result = []
         for x in statistics['facet_counts']['facet_dates']['minted']:
-            _parsed, _date = self.process_date(x)
-            if _parsed and statistics['facet_counts']['facet_dates']['minted'][x] is not 0:
+            _success, processed_date_str, processed_date_datetime = self.process_date(x)
+            if _success and statistics['facet_counts']['facet_dates']['minted'][x] is not 0:
                 result.append({'country': resource['country'], 'institution': resource['resource'],
-                               'data_key': resource_type, 'date': _date,
-                               'data_value': statistics['facet_counts']['facet_dates']['minted'][x]})
+                               'data_key': resource_type, 'date': processed_date_str,
+                               'data_value': statistics['facet_counts']['facet_dates']['minted'][x],
+                               'restriction': restriction['name']})
 
         return result
-
-    def process_date(self, date):
-
-        # 2000-01-01T00:00:00Z
-        # 2013-09-01
-        import iso8601
-
-        try:
-            time = iso8601.parse_date(date)
-            return True, datetime.strftime(time, '%Y-%m-%d')
-        except ParseError:
-            return False, None

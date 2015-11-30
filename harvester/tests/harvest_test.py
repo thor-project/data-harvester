@@ -11,11 +11,14 @@ class ORCIDHarvestTest(unittest.TestCase):
 
 
     def test_harvest_stats(self):
-        _dict = self.harvester.harvest()
+        results = self.harvester.harvest()
 
-        for statistic in self.harvester.get_available_statistics():
-            self.assertTrue(len(_dict['stats'][statistic]) > 0, msg="{} should have returned results".format(statistic))
-        print _dict['stats']
+        self.assertTrue(len(results)>0, msg="Number of results returned is zero.")
+
+        statistics = self.harvester.get_available_statistics()
+        for statistic in statistics:
+            for item in results:
+                self.assertTrue(statistic in item, msg='{0} not present for date {1}'.format(statistic, item['date']))
 
 
 class DataCiteHarvestTest(unittest.TestCase):
