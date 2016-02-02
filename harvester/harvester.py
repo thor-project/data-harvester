@@ -11,7 +11,8 @@ class Harvester(object):
 
     def get_url(self, url):
         import requests
-        response = requests.get(url)
+        headers = {'Accept': 'application/json'}
+        response = requests.get(url, headers=headers)
         contents = response.text
         return json.loads(contents)
 
@@ -19,7 +20,7 @@ class Harvester(object):
         pass
 
     def write_as_json(self, dict, file_path):
-        with open(file_path, 'w') as file:
+        with open(file_path, 'w+') as file:
             file.write(json.dumps(dict))
 
     def get_statistic(self, base_url, *args):
@@ -117,7 +118,7 @@ class DATACiteHarvester(Harvester):
     _base_url = 'http://search.datacite.org/api?q={0}&fq={1}_facet:"{2}"&fq=is_active:true&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={3}&facet.date.start={4}&facet.date.end={5}&facet.date.gap=%2B1MONTH{6}'
 
     _start_date = "2000-01-01T00:00:00Z"
-    _end_date = "2015-12-01T00:00:00Z"
+    _end_date = "2016-02-01T00:00:00Z"
     _date_field = "minted"
 
     search_space = [
