@@ -44,15 +44,20 @@ class Harvester(object):
 
         try:
             time = iso8601.parse_date(date)
-
-            if normalise_month:
-                parsed_date = datetime.strftime(time, '%Y-%m-01')
-            else:
-                parsed_date = datetime.strftime(time, '%Y-%m-%d')
-
-            return True, parsed_date, datetime.strptime(parsed_date, '%Y-%m-%d')
         except ParseError:
-            return False, None, None
+            try:
+                time = datetime.fromtimestamp(int(date)/1000.0)
+            except Exception:
+                return False, None, None
+
+
+        if normalise_month:
+            parsed_date = datetime.strftime(time, '%Y-%m-01')
+        else:
+            parsed_date = datetime.strftime(time, '%Y-%m-%d')
+
+        return True, parsed_date, datetime.strptime(parsed_date, '%Y-%m-%d')
+
 
 
 class ORCIDHarvester(Harvester):
@@ -70,6 +75,11 @@ class ORCIDHarvester(Harvester):
 
                 if _success and processed_date_datetime not in date_stats:
                     date_stats[processed_date_datetime] = self.populate_default_dict(processed_date_str)
+
+                print 'ORCID, innit.'
+                print date
+                print processed_date_datetime
+                print statistic
 
                 if query_result['timeline'][date] > date_stats[processed_date_datetime][statistic]:
                     date_stats[processed_date_datetime][statistic] = query_result['timeline'][date]
@@ -118,7 +128,7 @@ class DATACiteHarvester(Harvester):
     _base_url = 'http://search.datacite.org/api?q={0}&fq={1}_facet:"{2}"&fq=is_active:true&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={3}&facet.date.start={4}&facet.date.end={5}&facet.date.gap=%2B1MONTH{6}'
 
     _start_date = "2000-01-01T00:00:00Z"
-    _end_date = "2016-02-01T00:00:00Z"
+    _end_date = "2016-03-01T00:00:00Z"
     _date_field = "minted"
 
     search_space = [
@@ -133,8 +143,8 @@ class DATACiteHarvester(Harvester):
         {'type': 'datacentre',
          'resource': 'TIB.PANGAEA+-+PANGAEA+-+Publishing+Network+for+Geoscientific+and+Environmental+Data',
          'country': 'Germany'},
-        {'type': 'datacentre', 'resource': 'TIB.R-GATE+-+ResearchGate', 'country': 'Germany'},
         {'type': 'allocator', 'resource': 'ANDS+-+Australian+National+Data+Service', 'country': 'Australia'},
+        {'type': 'datacentre', 'resource': 'CERN.HEPDATA+-+HEPData.net', 'country': 'Switzerland'},
         {'type': 'datacentre', 'resource': 'CERN.ZENODO+-+ZENODO+-+Research.+Shared.', 'country': 'Switzerland'},
         {'type': 'datacentre', 'resource': 'CERN.YELLOW+-+CERN+Yellow+Reports', 'country': 'Switzerland'}
     ]
