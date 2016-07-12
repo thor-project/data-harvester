@@ -1,7 +1,34 @@
+# coding=utf-8
+#
+# This file is part of the THOR Dashboard Project.
+# Copyright (C) 2016 CERN.
+#
+# The THOR dashboard is free software; you can redistribute it
+# and/or modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of the
+# License, or (at your option) any later version.
+#
+# HEPData is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with the THOR dashboard; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+# MA 02111-1307, USA.
+#
+# In applying this license, CERN does not
+# waive the privileges and immunities granted to it by virtue of its status
+# as an Intergovernmental Organization or submit itself to any jurisdiction.
+
 import json
 import os
 from datetime import datetime
 from iso8601 import ParseError
+
+from .config import DATACITE_ALLOCATOR_SEARCH_SPACE, \
+    DATACITE_RESOURCE_TYPES, DATACITE_RESTRICTIONS, ORCID_STATISTICS
 
 __author__ = 'eamonnmaguire'
 
@@ -62,8 +89,6 @@ class Harvester(object):
 
 class ORCIDHarvester(Harvester):
     _base_url = 'https://pub.orcid.org/v2.0_rc1/statistics/{}'
-    _statistics_to_retrieve = ['liveIds', 'idsWithWorks', 'idsWithVerifiedEmail', 'uniqueDois', 'works',
-                               'worksWithDois', 'funding', 'education', 'employment']
 
     def harvest(self):
         # need to merge the stats into a coherent structure suitable for the front end.
@@ -75,11 +100,6 @@ class ORCIDHarvester(Harvester):
 
                 if _success and processed_date_datetime not in date_stats:
                     date_stats[processed_date_datetime] = self.populate_default_dict(processed_date_str)
-
-                print 'ORCID, innit.'
-                print date
-                print processed_date_datetime
-                print statistic
 
                 if query_result['timeline'][date] > date_stats[processed_date_datetime][statistic]:
                     date_stats[processed_date_datetime][statistic] = query_result['timeline'][date]
@@ -115,7 +135,7 @@ class ORCIDHarvester(Harvester):
         return __dict
 
     def get_available_statistics(self):
-        return self._statistics_to_retrieve
+        return ORCID_STATISTICS
 
 
 class DATACiteHarvester(Harvester):
@@ -125,49 +145,22 @@ class DATACiteHarvester(Harvester):
     # {3} - start date, e.g. 2000-01-01T00:00:00Z
     # {4} - end data, e.g. 2015-12-01T00:00:00Z
     # {5} - additional facets, e.g. dataset type &fq=resourceTypeGeneral:"dataset"
-    _base_url = 'http://search.datacite.org/api?q={0}&fq={1}_facet:"{2}"&fq=is_active:true&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={3}&facet.date.start={4}&facet.date.end={5}&facet.date.gap=%2B1MONTH{6}'
+    _base_url = 'http://search.datacite.org/api?q={0}&fq={1}_facet:"{2}"&fq=is_active:true' \
+                '&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={3}' \
+                '&facet.date.start={4}&facet.date.end={5}&facet.date.gap=%2B1MONTH{6}'
 
     _start_date = "2000-01-01T00:00:00Z"
-    _end_date = "2016-03-01T00:00:00Z"
+    _end_date = "2016-12-01T00:00:00Z"
     _date_field = "minted"
-
-    search_space = [
-
-        {'type': 'datacentre', 'resource': 'CDL.DRYAD+-+Dryad', 'country': 'United States'},
-        {'type': 'datacentre', 'resource': 'CDL.DIGSCI+-+Digital+Science', 'country': 'United Kingdom'},
-        {'type': 'datacentre', 'resource': 'BL.IMPERIAL+-+Imperial+College+London', 'country': 'United Kingdom'},
-        {'type': 'datacentre', 'resource': 'BL.CCDC+-+The+Cambridge+Crystallographic+Data+Centre',
-         'country': 'United Kingdom'},
-        {'type': 'datacentre', 'resource': 'BL.F1000R+-+Faculty+of+1000+Research+Ltd', 'country': 'United Kingdom'},
-        {'type': 'datacentre', 'resource': 'BL.UKDA+-+UK+Data+Archive', 'country': 'United Kingdom'},
-        {'type': 'datacentre',
-         'resource': 'TIB.PANGAEA+-+PANGAEA+-+Publishing+Network+for+Geoscientific+and+Environmental+Data',
-         'country': 'Germany'},
-        {'type': 'allocator', 'resource': 'ANDS+-+Australian+National+Data+Service', 'country': 'Australia'},
-        {'type': 'datacentre', 'resource': 'CERN.HEPDATA+-+HEPData.net', 'country': 'Switzerland'},
-        {'type': 'datacentre', 'resource': 'CERN.ZENODO+-+ZENODO+-+Research.+Shared.', 'country': 'Switzerland'},
-        {'type': 'datacentre', 'resource': 'CERN.YELLOW+-+CERN+Yellow+Reports', 'country': 'Switzerland'}
-    ]
-
-    resource_types = [{'name': 'Collection', 'facet': '&fq=resourceType_facet:"Collection"'},
-                      {'name': 'Dataset', 'facet': '&fq=resourceType_facet:"Dataset"'},
-                      {'name': 'Text', 'facet': '&fq=resourceType_facet:"Text"'},
-                      {'name': 'Software', 'facet': '&fq=resourceType_facet:"Software"'},
-                      {'name': 'other', 'facet': '&fq=resourceType_facet:"Other"'},
-                      {'name': 'Unknown', 'facet': "&fq=-resourceType_facet%3A[*+TO+*]"}
-                      ]
-
-    restrictions = [{'name': 'with_orcids', 'query': 'nameIdentifier:ORCID%5C:*'},
-                    {'name': 'without_orcids', 'query': '*'}]
 
     def harvest(self):
         os.makedirs(self._cachedir)
 
     def get_works(self):
         results = []
-        for resource in self.search_space:
-            for resource_type in self.resource_types:
-                for restriction in self.restrictions:
+        for resource in DATACITE_ALLOCATOR_SEARCH_SPACE:
+            for resource_type in DATACITE_RESOURCE_TYPES:
+                for restriction in DATACITE_RESTRICTIONS:
                     results += self.process_statistics(resource, resource_type['name'], restriction,
                                                        self.get_statistic(self._base_url, restriction['query'],
                                                                           resource['type'], resource['resource'],
