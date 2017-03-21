@@ -24,13 +24,15 @@
 
 import json
 import os
-from datetime import datetime
+
+from datetime import datetime, date
 
 from iso8601 import ParseError
 
 from .config import (DATACITE_ALLOCATOR_SEARCH_SPACE, DATACITE_RESOURCE_TYPES,
                      DATACITE_RESTRICTIONS, ORCID_STATISTICS)
 from .utils import create_file_path
+from dateutil.relativedelta import relativedelta
 
 __author__ = 'eamonnmaguire'
 
@@ -63,7 +65,6 @@ class Harvester(object):
 
     @staticmethod
     def process_date(date, normalise_month=False):
-
         """
         :param date: date string to be parsed, e.g. 2000-01-07T00:00:00Z
         :param normalise_month: if True, normalise to the month, standardising the day, e.g. 2000-01-01
@@ -75,10 +76,9 @@ class Harvester(object):
             time = iso8601.parse_date(date)
         except ParseError:
             try:
-                time = datetime.fromtimestamp(int(date)/1000.0)
+                time = datetime.fromtimestamp(int(date) / 1000.0)
             except Exception:
                 return False, None, None
-
 
         if normalise_month:
             parsed_date = datetime.strftime(time, '%Y-%m-01')
@@ -88,23 +88,26 @@ class Harvester(object):
         return True, parsed_date, datetime.strptime(parsed_date, '%Y-%m-%d')
 
 
-
 class ORCIDHarvester(Harvester):
     _base_url = 'https://pub.orcid.org/v2.0_rc1/statistics/{}'
 
     def harvest(self, output_file='cache/orcids.json'):
-        # need to merge the stats into a coherent structure suitable for the front end.
+        # need to merge the stats into a coherent structure suitable for the
+        # front end.
         date_stats = {}
         for statistic in self.get_available_statistics():
             query_result = self.get_statistic(self._base_url, statistic)
             for date in query_result['timeline']:
-                _success, processed_date_str, processed_date_datetime = self.process_date(date, normalise_month=True)
+                _success, processed_date_str, processed_date_datetime = self.process_date(
+                    date, normalise_month=True)
 
                 if _success and processed_date_datetime not in date_stats:
-                    date_stats[processed_date_datetime] = self.populate_default_dict(processed_date_str)
+                    date_stats[processed_date_datetime] = self.populate_default_dict(
+                        processed_date_str)
 
                 if query_result['timeline'][date] > date_stats[processed_date_datetime][statistic]:
-                    date_stats[processed_date_datetime][statistic] = query_result['timeline'][date]
+                    date_stats[processed_date_datetime][
+                        statistic] = query_result['timeline'][date]
 
         results = self.process_results(date_stats)
         self.write_as_json(results, output_file)
@@ -122,7 +125,8 @@ class ORCIDHarvester(Harvester):
 
             value = date.__getitem__(1)
             for statistic in self.get_available_statistics():
-                value[statistic + "_month"] = max(0, value[statistic] - last_values[statistic])
+                value[
+                    statistic + "_month"] = max(0, value[statistic] - last_values[statistic])
                 last_values[statistic] = value[statistic]
 
             processed_values.append(value)
@@ -162,7 +166,8 @@ class DATACiteHarvester(Harvester):
                 for restriction in DATACITE_RESTRICTIONS:
                     results += self.process_statistics(resource, resource_type['name'], restriction,
                                                        self.get_statistic(self._base_url, restriction['query'],
-                                                                          resource['type'], resource['resource'],
+                                                                          resource['type'], resource[
+                                                                              'resource'],
                                                                           self._date_field,
                                                                           self._start_date, self._end_date,
                                                                           resource_type['facet']))
@@ -174,7 +179,8 @@ class DATACiteHarvester(Harvester):
 
         result = []
         for x in statistics['facet_counts']['facet_dates']['minted']:
-            _success, processed_date_str, processed_date_datetime = self.process_date(x)
+            _success, processed_date_str, processed_date_datetime = self.process_date(
+                x)
             if _success and statistics['facet_counts']['facet_dates']['minted'][x] is not 0:
                 result.append({'country': resource['country'], 'institution': resource['resource'],
                                'data_key': resource_type, 'date': processed_date_str,
@@ -182,3 +188,45 @@ class DATACiteHarvester(Harvester):
                                'restriction': restriction['name']})
 
         return result
+
+
+class CrossRefHarvester(Harvester):
+
+    # rows=0 for returning only the total results
+    _base_url = 'http://api.crossref.org/works?filter={}&rows=0'
+
+    start_date = date(2007, 01, 01)
+    #end_date = date(2007, 12, 01)
+    end_date = datetime.now().date()
+
+    def harvest(self, output_file='cache/cross_refs.json'):
+        # need to merge the stats into a coherent structure suitable for the
+        # front end.
+        results = {
+            'crossrefs_by_month': []
+        }
+
+        while self.start_date <= self.end_date:
+            crossrefs_by_month_with_orcids = self.get_crossrefs_by_months('true', self.start_date)
+            crossrefs_by_month_without_orcids = self.get_crossrefs_by_months('false', self.start_date)
+            results['crossrefs_by_month'].append({
+                'total_items': crossrefs_by_month_with_orcids['message']['total-results'],
+                'date': str(self.start_date),
+                'restriction': 'with_orcids'
+            })
+
+            results['crossrefs_by_month'].append({
+                'total_items': crossrefs_by_month_without_orcids['message']['total-results'],
+                'date': str(self.start_date),
+                'restriction': 'without_orcids'
+            })
+            self.start_date += relativedelta(months=1)
+
+        self.write_as_json(results, output_file)
+
+    def get_crossrefs_by_months(self, has_orcid, start_date):
+        filters = 'has-orcid:{0},from-deposit-date:{1},until-deposit-date:{2}'.format(has_orcid, start_date, start_date + relativedelta(months=1))
+        return self.get_statistic(
+            self._base_url,
+            filters
+        )
