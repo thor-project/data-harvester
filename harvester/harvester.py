@@ -25,16 +25,17 @@
 import json
 import os
 from datetime import datetime
+
 from iso8601 import ParseError
 
-from .config import DATACITE_ALLOCATOR_SEARCH_SPACE, \
-    DATACITE_RESOURCE_TYPES, DATACITE_RESTRICTIONS, ORCID_STATISTICS
+from .config import (DATACITE_ALLOCATOR_SEARCH_SPACE, DATACITE_RESOURCE_TYPES,
+                     DATACITE_RESTRICTIONS, ORCID_STATISTICS)
+from .utils import create_file_path
 
 __author__ = 'eamonnmaguire'
 
 
 class Harvester(object):
-    cachedir = 'cache'
 
     def get_url(self, url):
         import requests
@@ -43,10 +44,11 @@ class Harvester(object):
         contents = response.text
         return json.loads(contents)
 
-    def harvest(self):
+    def harvest(self, output_file):
         pass
 
     def write_as_json(self, dict, file_path):
+        create_file_path(file_path)
         with open(file_path, 'w+') as file:
             file.write(json.dumps(dict))
 
@@ -90,7 +92,7 @@ class Harvester(object):
 class ORCIDHarvester(Harvester):
     _base_url = 'https://pub.orcid.org/v2.0_rc1/statistics/{}'
 
-    def harvest(self):
+    def harvest(self, output_file='cache/orcids.json'):
         # need to merge the stats into a coherent structure suitable for the front end.
         date_stats = {}
         for statistic in self.get_available_statistics():
@@ -105,7 +107,7 @@ class ORCIDHarvester(Harvester):
                     date_stats[processed_date_datetime][statistic] = query_result['timeline'][date]
 
         results = self.process_results(date_stats)
-        self.write_as_json(results, os.path.join(self.cachedir, 'orcids.json'))
+        self.write_as_json(results, output_file)
         return results
 
     def process_results(self, stats):
@@ -149,14 +151,11 @@ class DATACiteHarvester(Harvester):
                 '&fq=has_metadata:true&wt=json&rows=0&facet=true&facet.date={3}' \
                 '&facet.date.start={4}&facet.date.end={5}&facet.date.gap=%2B1MONTH{6}'
 
-    _start_date = "2000-01-01T00:00:00Z"
-    _end_date = "2016-12-01T00:00:00Z"
-    _date_field = "minted"
+    _start_date = '2000-01-01T00:00:00Z'
+    _end_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+    _date_field = 'minted'
 
-    def harvest(self):
-        os.makedirs(self._cachedir)
-
-    def get_works(self):
+    def harvest(self, output_file='cache/dois.json'):
         results = []
         for resource in DATACITE_ALLOCATOR_SEARCH_SPACE:
             for resource_type in DATACITE_RESOURCE_TYPES:
@@ -168,7 +167,7 @@ class DATACiteHarvester(Harvester):
                                                                           self._start_date, self._end_date,
                                                                           resource_type['facet']))
 
-        self.write_as_json(results, os.path.join(self.cachedir, 'dois.json'))
+        self.write_as_json(results, output_file)
         return results
 
     def process_statistics(self, resource, resource_type, restriction, statistics):
