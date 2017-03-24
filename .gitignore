@@ -2,3 +2,4 @@
 *.ipr
 *.iml
 .DS_Store
+*.pyc
