@@ -23,16 +23,18 @@
 # as an Intergovernmental Organization or submit itself to any jurisdiction.
 
 import json
-import os
+from datetime import date, datetime
+from time import sleep
 
-from datetime import datetime, date
+import requests
+from requests import HTTPError
 
+from dateutil.relativedelta import relativedelta
 from iso8601 import ParseError
 
-from .config import (DATACITE_ALLOCATOR_SEARCH_SPACE, DATACITE_RESOURCE_TYPES,
-                     DATACITE_RESTRICTIONS, ORCID_STATISTICS)
+from .config import (DATACITE_RESOURCE_TYPES, DATACITE_RESTRICTIONS,
+                     ORCID_STATISTICS)
 from .utils import create_file_path
-from dateutil.relativedelta import relativedelta
 
 __author__ = 'eamonnmaguire'
 
@@ -40,11 +42,24 @@ __author__ = 'eamonnmaguire'
 class Harvester(object):
 
     def get_url(self, url):
-        import requests
         headers = {'Accept': 'application/json'}
-        response = requests.get(url, headers=headers)
-        contents = response.text
-        return json.loads(contents)
+        attempts = 10  # as API sometimes doesnt respond, we'll try few times
+
+        while True:
+            attempts -= 1
+
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                break
+
+            except HTTPError as e:
+                if attempts > 0:
+                    sleep(30)  # try again after 30 seconds
+                else:
+                    raise e
+
+        return json.loads(response.text)
 
     def harvest(self, output_file):
         pass
@@ -159,15 +174,28 @@ class DATACiteHarvester(Harvester):
     _end_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     _date_field = 'minted'
 
+    def _get_allocators(self):
+        url = 'https://api.datacite.org/providers?page[size]=100'
+
+        data = requests.get(url).json()['data']
+        allocators = []
+
+        for provider in data:
+            allocator = '{} - {}'.format(provider['attributes']['symbol'].encode('utf-8'),
+                                         provider['attributes']['name'].encode('utf-8'))
+            allocators.append(allocator.replace(' ', '+'))
+
+        return allocators
+
     def harvest(self, output_file='cache/dois.json'):
         results = []
-        for resource in DATACITE_ALLOCATOR_SEARCH_SPACE:
+        for resource in self._get_allocators():
             for resource_type in DATACITE_RESOURCE_TYPES:
                 for restriction in DATACITE_RESTRICTIONS:
                     results += self.process_statistics(resource, resource_type['name'], restriction,
                                                        self.get_statistic(self._base_url, restriction['query'],
-                                                                          resource['type'], resource[
-                                                                              'resource'],
+                                                                          'allocator',
+                                                                          resource,
                                                                           self._date_field,
                                                                           self._start_date, self._end_date,
                                                                           resource_type['facet']))
@@ -182,7 +210,7 @@ class DATACiteHarvester(Harvester):
             _success, processed_date_str, processed_date_datetime = self.process_date(
                 x)
             if _success and statistics['facet_counts']['facet_dates']['minted'][x] is not 0:
-                result.append({'country': resource['country'], 'institution': resource['resource'],
+                result.append({'institution': resource,
                                'data_key': resource_type, 'date': processed_date_str,
                                'data_value': statistics['facet_counts']['facet_dates']['minted'][x],
                                'restriction': restriction['name']})

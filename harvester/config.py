@@ -23,79 +23,26 @@
 # as an Intergovernmental Organization or submit itself to any jurisdiction.
 
 ORCID_STATISTICS = ['liveIds', 'idsWithWorks', 'idsWithVerifiedEmail', 'uniqueDois', 'works',
-                               'worksWithDois', 'funding', 'education', 'employment']
-
-DATACITE_ALLOCATOR_SEARCH_SPACE = [
-
-    {'type': 'allocator',
-     'resource': 'ANDS+-+Australian+National+Data+Service',
-     'country': 'Australia'},
-    {'type': 'allocator', 'resource': 'BL+-+The+British+Library',
-     'country': 'United Kingdom'},
-    {'type': 'allocator', 'resource': 'CDL+-+California+Digital+Library',
-     'country': 'United States'},
-    {'type': 'allocator',
-     'resource': 'CERN+-+CERN+-+European+Organization+for+Nuclear+Research',
-     'country': 'Switzerland'},
-    {'type': 'allocator',
-     'resource': 'CISTI+-+National+Research+Council+Canada',
-     'country': 'Canada'},
-    {'type': 'allocator', 'resource': 'CRUI+-+CRUI2011', 'country': 'Italy'},
-    {'type': 'allocator', 'resource': 'DELFT+-+TU+Delft+Library',
-     'country': 'Holland'},
-    {'type': 'allocator',
-     'resource': 'DK+-+Technical+Information+Center+of+Denmark',
-     'country': 'Denmark'},
-    {'type': 'allocator', 'resource': 'ESTDOI+-+Tartu+University',
-     'country': 'Estonia'},
-    {'type': 'allocator', 'resource': 'ETHZ+-+ETH+Zurich',
-     'country': 'Switzerland'},
-    {'type': 'allocator',
-     'resource': 'GESIS+-+GESIS+-+Leibniz+Institute+for+the+Social+Sciences',
-     'country': 'Germany'},
-    {'type': 'allocator',
-     'resource': 'INIST+-+Institute+for+Scientific+and+Technical+Information',
-     'country': 'France'},
-    {'type': 'allocator', 'resource': 'MTAKIK+-+MTA+Könyvtára',
-     'country': 'Hungary'},
-    {'type': 'allocator', 'resource': 'SND+-+Swedish+National+Data+Service',
-     'country': 'Sweden'},
-
-    {'type': 'allocator',
-     'resource': 'NRCT+-+National+Research+Council+of+Thailand',
-     'country': 'Thailand'},
-
-    {'type': 'allocator',
-     'resource': 'OSTI+-+Office+of+Scientific+and+Technical+Information+(OSTI)%2C+US+Department+of+Energy',
-     'country': 'United States'},
-
-    {'type': 'allocator', 'resource': 'PURDUE+-+Purdue+University+Library',
-     'country': 'United States'},
-    {'type': 'allocator',
-     'resource': 'SUBGOE+-+Niedersächsische+Staats-+und+Universitätsbibliothek+Göttingen',
-     'country': 'Germany'},
-
-    {'type': 'allocator',
-     'resource': 'TIB+-+German+National+Library+of+Science+and+Technology',
-     'country': 'Germany'},
-
-    {'type': 'allocator',
-     'resource': 'ZBMED+-+German+National+Library+of+Medicine',
-     'country': 'Germany'},
-    {'type': 'allocator',
-     'resource': 'ZBW+-+Deutsche+Zentralbibliothek+für+Wirtschaftswissenschaften+–+Leibniz-Informationszentrum+Wirtschaft',
-     'country': 'Germany'}
-
-]
+                    'worksWithDois', 'funding', 'education', 'employment']
 
 DATACITE_RESOURCE_TYPES = [
     {'name': 'Collection', 'facet': '&fq=resourceType_facet:"Collection"'},
+    {'name': 'Image', 'facet': '&fq=resourceType_facet:"Image"'},
+    {'name': 'Audiovisual', 'facet': '&fq=resourceType_facet:"Audiovisual"'},
+    {'name': 'Even', 'facet': '&fq=resourceType_facet:"Event"'},
+    {'name': 'Film', 'facet': '&fq=resourceType_facet:"Film"'},
+    {'name': 'Sound', 'facet': '&fq=resourceType_facet:"Sound"'},
+    {'name': 'Model', 'facet': '&fq=resourceType_facet:"Model"'},
+    {'name': 'Interactive resource', 'facet': '&fq=resourceType_facet:"InteractiveResource"'},
     {'name': 'Dataset', 'facet': '&fq=resourceType_facet:"Dataset"'},
+    {'name': 'Workflow', 'facet': '&fq=resourceType_facet:"Workflow"'},
+    {'name': 'Service', 'facet': '&fq=resourceType_facet:"Service"'},
     {'name': 'Text', 'facet': '&fq=resourceType_facet:"Text"'},
+    {'name': 'Physical object', 'facet': '&fq=resourceType_facet:"PhysicalObject"'},
     {'name': 'Software', 'facet': '&fq=resourceType_facet:"Software"'},
     {'name': 'other', 'facet': '&fq=resourceType_facet:"Other"'},
     {'name': 'Unclassified', 'facet': "&fq=-resourceType_facet%3A[*+TO+*]"}
-    ]
+]
 
 DATACITE_RESTRICTIONS = [{'name': 'with_orcids', 'query': 'nameIdentifier:ORCID%5C:*'},
-                {'name': 'without_orcids', 'query': '*'}]
+                         {'name': 'without_orcids', 'query': '*'}]
